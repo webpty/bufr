@@ -1,5 +1,5 @@
 import { Refused, type Waiting } from "../domain/model";
-import type { PhotoStore } from "../domain/ports";
+import type { AvatarStore, PhotoStore } from "../domain/ports";
 
 const WAITING = "waiting/";
 const HOME = "state/home.json";
@@ -67,11 +67,11 @@ export class R2PhotoStore implements PhotoStore {
     return photo ? { photo, body: o.body } : null;
   }
 
-  async remove(id: string): Promise<boolean> {
+  async remove(id: string): Promise<Waiting | null> {
     const there = await this.bucket.head(WAITING + id);
-    if (!there) return false;
+    if (!there) return null;
     await this.bucket.delete(WAITING + id);
-    return true;
+    return fromObject(id, there.size, there.customMetadata) ?? { id, path: id, sha256: "", size: there.size, update: false, sender: "", added: "" };
   }
 
   async home() {
@@ -88,5 +88,24 @@ export class R2PhotoStore implements PhotoStore {
     await this.bucket.put(HOME, JSON.stringify({ ip, seen: at.toISOString() }), {
       httpMetadata: { contentType: "application/json" },
     });
+  }
+}
+
+/** Profile photos, under media/avatars/ in the same bucket: never under
+    waiting/, so the NAS never sees one. */
+export class R2AvatarStore implements AvatarStore {
+  constructor(private bucket: R2Bucket) {}
+
+  async put(key: string, bytes: ArrayBuffer, type: string) {
+    await this.bucket.put(key, bytes, { httpMetadata: { contentType: type } });
+  }
+
+  async get(key: string) {
+    const o = await this.bucket.get(key);
+    return o ? { body: o.body, type: o.httpMetadata?.contentType ?? "image/jpeg" } : null;
+  }
+
+  async remove(key: string) {
+    await this.bucket.delete(key);
   }
 }

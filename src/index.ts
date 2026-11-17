@@ -1,15 +1,22 @@
+// Three ways in. /v1/ is the API for keys (Geotag and the NAS), /api/ is the
+// API behind the page, and everything else is the page itself, whose
+// assets binding hands back index.html for any path it does not know.
+
+import { D1FetchLog } from "./adapters/d1";
 import { SecretKeyBook } from "./adapters/keys";
 import { R2PhotoStore } from "./adapters/r2";
 import { Buffer } from "./domain/buffer";
+import type { Env } from "./env";
 import { handle } from "./http";
-
-export interface Env {
-  PHOTOS: R2Bucket;
-  KEYS?: string;
-}
+import { handlePage } from "./page";
 
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
-    return handle(request, new Buffer(new R2PhotoStore(env.PHOTOS)), new SecretKeyBook(env.KEYS));
+    const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/v1/")) {
+      return handle(request, new Buffer(new R2PhotoStore(env.PHOTOS), new D1FetchLog(env.DB)), new SecretKeyBook(env.KEYS));
+    }
+    if (pathname.startsWith("/api/")) return handlePage(request, env);
+    return env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;

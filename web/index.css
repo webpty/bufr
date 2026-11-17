@@ -1,0 +1,73 @@
+/* HeroUI's stylesheet imports Tailwind itself, so this is the only import. */
+@import "@heroui/styles/css";
+/* Pro components ship their own layer, on top of the base styles above. */
+@import "@heroui-pro/react/css";
+
+/* The house rules, set once here rather than on every component: one corner
+   radius everywhere, 10 pixels; form fields with a visible border, since
+   HeroUI's default reads as a hole in the page. Both themes alike. */
+:root,
+.dark {
+  --radius: 0.625rem;
+  --field-radius: var(--radius);
+  --field-border-width: 1px;
+  --field-border: var(--border);
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--background);
+}
+
+/* Room for the notch and the home bar, in one place rather than per view. */
+main {
+  padding-top: calc(1rem + env(safe-area-inset-top));
+  padding-bottom: calc(2.5rem + env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/* Inside the components layer, so HeroUI's own rules are beaten but a
+   Tailwind utility on one component still wins. */
+@layer components {
+  /* A card has to read as a card: HeroUI's surface is the page's colour in
+     the light theme. */
+  .surface {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* HeroUI's code input does not centre its own boxes. */
+  .input-otp {
+    justify-content: center;
+  }
+
+  /* Every button one height, for a thumb, and an icon-only one square at it. */
+  .button:not(.button--sm):not(.button--lg) {
+    height: calc(var(--spacing) * 11);
+    font-size: var(--text-base);
+  }
+  .button--icon-only {
+    aspect-ratio: 1;
+    width: auto;
+    padding-inline: 0;
+  }
+
+  /* No word inside a button or a label ever goes onto a second line. */
+  .button,
+  .label {
+    white-space: nowrap;
+  }
+
+  /* Notifications come down from the top, clear of the clock. */
+  .toast-region--top,
+  .toast-region--top-start,
+  .toast-region--top-end {
+    top: calc(env(safe-area-inset-top) + var(--spacing) * 4);
+  }
+}
+
+/* A status line keeps its height while empty, so nothing moves when it fills. */
+.reserve-line {
+  min-height: 1.25rem;
+}

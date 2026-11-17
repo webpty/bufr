@@ -5,12 +5,11 @@ import type { KeyBook } from "./domain/ports";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-/** Nothing for anyone without a key: no page, no hint of what this is. */
+/** Nothing for anyone without a key: no hint of what this is. */
 const nothing = () => new Response(null, { status: 404 });
 
 export async function handle(request: Request, buffer: Buffer, keys: KeyBook): Promise<Response> {
   const url = new URL(request.url);
-  if (!url.pathname.startsWith("/v1/")) return nothing();
   const key = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   const found = key ? await keys.find(key) : null;
   if (!found) return nothing();
@@ -57,12 +56,23 @@ export async function handle(request: Request, buffer: Buffer, keys: KeyBook): P
         });
       }
       if (request.method === "DELETE") {
-        await buffer.done(caller, id);
+        // What the NAS says about the fetch, for the overview: how long it
+        // took and how big it was. Optional, so an older fetcher still clears.
+        const seconds = request.headers.get("x-seconds");
+        const size = request.headers.get("x-size");
+        await buffer.done(caller, id, {
+          seconds: seconds === null ? undefined : Number(seconds),
+          size: size === null ? undefined : Number(size),
+        });
         return new Response(null, { status: 204 });
       }
     }
     return nothing();
   } catch (error) {
+    // An upload refused before it was read is read off first: answering in
+    // the middle of it drops the connection, and Geotag would see a network
+    // failure instead of the reason.
+    if (request.body && !request.bodyUsed) await request.body.pipeTo(new WritableStream()).catch(() => {});
     if (error instanceof Refused) return json({ error: error.message }, error.status);
     console.error(error);
     return json({ error: "Something went wrong at bufr.cc." }, 500);

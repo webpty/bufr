@@ -30,3 +30,29 @@ export class Refused extends Error {
     super(message);
   }
 }
+
+/** A photo the NAS fetched and cleared, as the overview lists it. */
+export interface Fetched {
+  path: string;
+  size: number;
+  /** How long the NAS took to fetch it; null when it did not say. */
+  seconds: number | null;
+  sender: string;
+  at: string;
+}
+
+/** Somebody on the allow-list for the page. */
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: "owner" | "member";
+  photoKey: string | null;
+  country: string | null;
+  language: string | null;
+  languageChosen: boolean;
+  dateOrder: "dmmmy" | "dmy" | "mdy" | "ymd";
+  clock24h: boolean;
+  timeZone: string;
+  createdAt: string;
+}

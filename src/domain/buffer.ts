@@ -1,8 +1,11 @@
 import { Refused, type Caller, type Waiting } from "./model";
-import type { PhotoStore } from "./ports";
+import type { FetchLog, PhotoStore } from "./ports";
 
 /** The home counts as seen while the NAS has fetched within this time. */
 const HOME_FRESH_MS = 10 * 60 * 1000;
+
+/** How many fetches are remembered for the overview. */
+export const FETCHES_KEPT = 200;
 
 /** A path on the NAS: plain folder names, never "..", never absolute. */
 export function cleanPath(raw: string): string {
@@ -21,7 +24,10 @@ export async function idFor(path: string): Promise<string> {
 }
 
 export class Buffer {
-  constructor(private store: PhotoStore) {}
+  constructor(
+    private store: PhotoStore,
+    private log: FetchLog,
+  ) {}
 
   private need(caller: Caller, role: Caller["role"]) {
     if (caller.role !== role) throw new Refused(403, "This key can't do that.");
@@ -78,8 +84,20 @@ export class Buffer {
     return found;
   }
 
-  async done(caller: Caller, id: string) {
+  /** The NAS has it. `report` is what the NAS says about the fetch: how
+      long it took and how big it was on arrival. */
+  async done(caller: Caller, id: string, report: { seconds?: number; size?: number } = {}) {
     this.need(caller, "fetcher");
-    if (!(await this.store.remove(id))) throw new Refused(404, "Not waiting here.");
+    const photo = await this.store.remove(id);
+    if (!photo) throw new Refused(404, "Not waiting here.");
+    const seconds = report.seconds !== undefined && Number.isFinite(report.seconds) && report.seconds >= 0 ? report.seconds : null;
+    const size = report.size !== undefined && Number.isFinite(report.size) && report.size > 0 ? report.size : photo.size;
+    try {
+      // The photo is already off: a failure to write it down must not make
+      // the NAS think it is still waiting.
+      await this.log.record({ path: photo.path, size, seconds, sender: photo.sender, at: new Date().toISOString() }, FETCHES_KEPT);
+    } catch (error) {
+      console.error("could not record the fetch", error);
+    }
   }
 }

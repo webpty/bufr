@@ -4,19 +4,56 @@ compatibility_date = "2026-10-01"
 
 # On its own domain, bufr.cc (David, 17 Nov 2026). The build creates the DNS
 # record, the zone being on this account. No workers.dev address.
+#
+# A custom_domain route makes `wrangler dev` present the Worker as bufr.cc and
+# nothing local reaches it, so the built Worker is tested with
+# `node scripts/serve-built.mjs`, which strips the route from dist's copy.
 routes = [
   { pattern = "bufr.cc", custom_domain = true },
 ]
 workers_dev = false
 preview_urls = false
 
-# Photos waiting for the NAS, under waiting/<id>, and the home's last address
-# under state/home.json. KEYS is a secret: a JSON object from the SHA-256 of
-# each key to its name and role ("sender" or "fetcher"), set with
-#   npx wrangler secret put KEYS
+# Secrets, set with `npx wrangler secret put <NAME>`, never written here:
+#   KEYS            JSON from the SHA-256 of each key to its name and role
+#                   ("sender" or "fetcher") and home.
+#   SESSION_SECRET  HMACs the sign-in codes and session ids. Rotating it
+#                   signs everybody out of the page.
+
+# The page, built by Vite into dist/client; the Cloudflare Vite plugin writes
+# the directory into the generated config. /v1/ and /api/ go to the Worker;
+# every other path is the one page.
+[assets]
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/v1/*", "/api/*"]
+
+# Photos waiting for the NAS, under waiting/<id>, the home's last address
+# under state/home.json, and profile photos under media/avatars/.
 [[r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "bufr-photos"
+
+# The page's allow-list, sign-in codes and sessions, and the fetches the NAS
+# reported. Migrations in migrations/, applied by hand.
+[[d1_databases]]
+binding = "DB"
+database_name = "bufr-db"
+database_id = "432e95c6-e3e3-4ea0-80b0-b28d1901fd96"
+
+# Sign-in codes, from sign-in@bufr.cc: Cloudflare Email Service, which wants
+# bufr.cc onboarded under Email Sending.
+[[send_email]]
+name = "EMAIL"
+
+# A burst of sign-in attempts from one machine, stopped before any of it
+# reaches a code. Its own namespace: 1001 is blucat's, trako's and tracpac's,
+# 1002 geome.cc's, and a shared one would share the count.
+[[unsafe.bindings]]
+name = "SIGN_IN_LIMIT"
+type = "ratelimit"
+namespace_id = "1003"
+simple = { limit = 20, period = 60 }
 
 [observability]
 enabled = true

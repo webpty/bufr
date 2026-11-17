@@ -1,7 +1,9 @@
-// Runs against `wrangler dev` on BASE with .dev.vars holding the test keys
-// below (see test/dev-vars.mjs). Leaves nothing behind: every photo it sends
-// is fetched and cleared.
+// Runs against the built Worker (`node scripts/serve-built.mjs`) on BASE,
+// with .dev.vars holding the test keys below. Leaves nothing behind: every
+// photo it sends is fetched and cleared, and the fetches it causes are taken
+// back out of the local fetch log.
 import { createHash } from "node:crypto";
+import { clearTestFetches } from "./local-db.mjs";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8795";
 const SENDER = "test-sender-key-0123456789abcdef";
@@ -31,7 +33,14 @@ const send = (body, fingerprint, extra = {}) =>
 // Nothing for strangers.
 check("no key: nothing", (await call("/v1/status")).status === 404);
 check("wrong key: nothing", (await call("/v1/status", "not-a-key-but-long-enough-0000")).status === 404);
-check("the front page: nothing", (await call("/", SENDER)).status === 404);
+{
+  // The page is there for anybody, and says nothing about what this is.
+  const r = await call("/");
+  const html = await r.text();
+  check("the front page is the bare page", r.status === 200 && html.includes('id="root"'), String(r.status));
+  check("the page advertises nothing", !/name="description"|property="og:|name="twitter:/.test(html));
+  check("a key gets no page from /v1/", (await call("/v1/", SENDER)).status === 404);
+}
 
 // A sender's view.
 let r = await call("/v1/status", SENDER);
@@ -69,7 +78,10 @@ r = await call("/v1/photos/" + mine.id, FETCHER);
 const got = Buffer.from(await r.arrayBuffer());
 check("the fetcher gets the same bytes", createHash("sha256").update(got).digest("hex") === sha);
 
-check("cleared once fetched", (await call("/v1/photos/" + mine.id, FETCHER, { method: "DELETE" })).status === 204);
+check(
+  "cleared once fetched, with how long it took",
+  (await call("/v1/photos/" + mine.id, FETCHER, { method: "DELETE", headers: { "x-seconds": "1.5", "x-size": String(photo.length) } })).status === 204,
+);
 check("gone after clearing", (await call("/v1/photos/" + mine.id, FETCHER)).status === 404);
 
 // The phone's "home/..." becomes the key's own home.
@@ -81,6 +93,8 @@ check("gone after clearing", (await call("/v1/photos/" + mine.id, FETCHER)).stat
   check("home/ becomes homes/<user>/", r.status === 201 && k.path === "homes/testuser/Geotag/2026.11.17 Test/HOME.JPG", JSON.stringify(k));
   await call("/v1/photos/" + k.id, FETCHER, { method: "DELETE" });
 }
+
+clearTestFetches();
 
 console.log(failed ? `${failed} failed` : "all passed");
 process.exit(failed ? 1 : 0);

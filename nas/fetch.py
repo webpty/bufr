@@ -2,8 +2,10 @@
 
 Each photo is saved under ROOT at the path Geotag gave it, checked against
 its fingerprint, given the photo's own date and the folder owner's ownership,
-and only then taken off bufr.cc. Nothing already on the NAS is overwritten,
-except Geotag's own earlier copy of the same photo when it says so.
+and only then taken off bufr.cc, saying how long the fetch took and how big
+the photo was, for the overview page. Nothing already on the NAS is
+overwritten, except Geotag's own earlier copy of the same photo when it says
+so.
 """
 
 import hashlib
@@ -28,10 +30,11 @@ def say(text):
     print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), text, flush=True)
 
 
-def ask(method, path, timeout=60):
+def ask(method, path, timeout=60, headers=None):
     # Its own name: Cloudflare turns away Python's default one (error 1010).
     request = urllib.request.Request(URL + path, method=method,
-                                     headers={"Authorization": "Bearer " + KEY, "User-Agent": "bufr-fetch/0.1"})
+                                     headers={"Authorization": "Bearer " + KEY, "User-Agent": "bufr-fetch/0.2",
+                                              **(headers or {})})
     return urllib.request.urlopen(request, timeout=timeout)
 
 
@@ -71,30 +74,35 @@ def make_folders(folder):
 
 
 def place(photo):
-    """Fetches one photo; True once it is safely on the NAS (or already was)."""
+    """Fetches one photo. Once it is safely on the NAS (or already was), how
+    long the fetch took in seconds and how many bytes came; None otherwise."""
     target = os.path.realpath(os.path.join(ROOT, photo["path"]))
     if not any(target.startswith(a + os.sep) for a in ALLOWED):
         say(f"refused {photo['path']}: outside the folders allowed")
-        return False
+        return None
     folder, name = os.path.split(target)
     make_folders(folder)
 
     work = os.path.join(folder, f".{name}.bufr-{photo['id'][:8]}")
     digest = hashlib.sha256()
+    size = 0
+    started = time.monotonic()
     try:
         with ask("GET", "/v1/photos/" + photo["id"], timeout=300) as answer, open(work, "wb") as out:
             for chunk in iter(lambda: answer.read(4 << 20), b""):
                 out.write(chunk)
                 digest.update(chunk)
+                size += len(chunk)
     except Exception as error:
         if os.path.exists(work):
             os.remove(work)
         say(f"could not fetch {photo['path']}: {error}")
-        return False
+        return None
+    took = time.monotonic() - started
     if digest.hexdigest() != photo["sha256"]:
         os.remove(work)
         say(f"{photo['path']} arrived different from what was sent; trying again later")
-        return False
+        return None
 
     # Its name: its own, unless another photo has it.
     n = 1
@@ -103,7 +111,7 @@ def place(photo):
         if os.path.getsize(final) == photo["size"] and file_hash(final) == photo["sha256"]:
             os.remove(work)
             say(f"{photo['path']} was already on the NAS")
-            return True
+            return took, size
         if photo.get("update") and n == 1:
             break  # Geotag's earlier copy of this photo, replaced
         n += 1
@@ -122,8 +130,8 @@ def place(photo):
         except ValueError:
             pass
     os.replace(work, final)
-    say(f"saved {os.path.relpath(final, ROOT)}")
-    return True
+    say(f"saved {os.path.relpath(final, ROOT)} ({size / 1e6:.1f} MB in {took:.1f} s)")
+    return took, size
 
 
 def round_once():
@@ -139,9 +147,12 @@ def round_once():
     if waiting:
         say(f"{len(waiting)} waiting")
     for photo in waiting:
-        if place(photo):
+        fetched = place(photo)
+        if fetched:
+            took, size = fetched
             try:
-                ask("DELETE", "/v1/photos/" + photo["id"]).close()
+                ask("DELETE", "/v1/photos/" + photo["id"],
+                    headers={"X-Seconds": f"{took:.3f}", "X-Size": str(size)}).close()
             except Exception as error:
                 say(f"could not clear {photo['path']} at bufr.cc: {error}")
 
