@@ -72,5 +72,15 @@ check("the fetcher gets the same bytes", createHash("sha256").update(got).digest
 check("cleared once fetched", (await call("/v1/photos/" + mine.id, FETCHER, { method: "DELETE" })).status === 204);
 check("gone after clearing", (await call("/v1/photos/" + mine.id, FETCHER)).status === 404);
 
+// The phone's "home/..." becomes the key's own home.
+{
+  const b = Buffer.from("home folder test");
+  const s = createHash("sha256").update(b).digest("hex");
+  r = await call("/v1/photos", SENDER, { method: "PUT", body: b, headers: { "x-path": encodeURIComponent("home/Geotag/2026.11.17 Test/HOME.JPG"), "x-sha256": s } });
+  const k = await r.json();
+  check("home/ becomes homes/<user>/", r.status === 201 && k.path === "homes/testuser/Geotag/2026.11.17 Test/HOME.JPG", JSON.stringify(k));
+  await call("/v1/photos/" + k.id, FETCHER, { method: "DELETE" });
+}
+
 console.log(failed ? `${failed} failed` : "all passed");
 process.exit(failed ? 1 : 0);

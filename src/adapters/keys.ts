@@ -7,7 +7,7 @@ async function sha256(text: string): Promise<string> {
 
 /** The KEYS secret: {"<sha256 of key>": {"name": "...", "role": "sender" | "fetcher"}}. */
 export class SecretKeyBook implements KeyBook {
-  private book: Record<string, { name: string; role: "sender" | "fetcher" }>;
+  private book: Record<string, { name: string; role: "sender" | "fetcher"; home?: string }>;
 
   constructor(json: string | undefined) {
     try {

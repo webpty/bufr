@@ -14,5 +14,5 @@ export interface PhotoStore {
 
 /** The keys allowed in, by the SHA-256 of each. */
 export interface KeyBook {
-  find(key: string): Promise<{ name: string; role: "sender" | "fetcher" } | null>;
+  find(key: string): Promise<{ name: string; role: "sender" | "fetcher"; home?: string } | null>;
 }

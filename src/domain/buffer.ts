@@ -48,7 +48,12 @@ export class Buffer {
     body: ReadableStream,
   ): Promise<Waiting> {
     this.need(caller, "sender");
-    const path = cleanPath(input.path);
+    let path = cleanPath(input.path);
+    // The phone knows its folder as the logged-in user's "home": the key says whose.
+    if (path.startsWith("home/")) {
+      if (!caller.home) throw new Refused(400, "This key has no home folder.");
+      path = `homes/${caller.home}/${path.slice("home/".length)}`;
+    }
     const sha256 = input.sha256.toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Refused(400, "The fingerprint is missing.");
     if (!Number.isFinite(input.size) || input.size <= 0) throw new Refused(411, "The size is missing.");

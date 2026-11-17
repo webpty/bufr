@@ -5,6 +5,8 @@ export type Role = "sender" | "fetcher";
 export interface Caller {
   name: string;
   role: Role;
+  /** The NAS user whose home "home/..." means, for this key ("david"). */
+  home?: string;
 }
 
 /** A photo waiting at Cloudflare for the NAS to fetch it. */

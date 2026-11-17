@@ -25,8 +25,12 @@ not, with no notification.
 
 ## Keys
 
-- Secret `KEYS`: JSON from the SHA-256 of each key to `{name, role}`;
-  role `sender` (Geotag) or `fetcher` (the NAS). Set with
+- Secret `KEYS`: JSON from the SHA-256 of each key to `{name, role, home}`;
+  role `sender` (Geotag) or `fetcher` (the NAS). `home` is the NAS user
+  whose home a phone's "home/..." path means: the iPhone reaches the NAS as
+  the logged-in user's "home" share, so it sends "home/Geotag/...", which
+  becomes "homes/<home>/Geotag/..." (david for David's keys, amanda for
+  Amanda's). Set with
   `npx wrangler secret put KEYS`. The keys themselves are in `.keys/`
   (git-ignored), one file each. Never print one; hand over by clipboard.
 
