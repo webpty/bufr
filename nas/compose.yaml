@@ -1,0 +1,16 @@
+services:
+  bufr:
+    image: python:3.13-alpine
+    container_name: bufr
+    restart: unless-stopped
+    command: ["python", "-u", "/app/fetch.py"]
+    env_file: .env
+    environment:
+      BUFR_URL: https://bufr.cc
+      BUFR_ROOT: /volume1
+      BUFR_ALLOWED: /volume1/homes
+      TZ: America/Panama
+    volumes:
+      - ./fetch.py:/app/fetch.py:ro
+      - /volume1/homes:/volume1/homes
+    mem_limit: 128m

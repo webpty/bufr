@@ -1,0 +1,22 @@
+name = "bufr"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# On its own domain, bufr.cc (David, 17 Nov 2026). The build creates the DNS
+# record, the zone being on this account. No workers.dev address.
+routes = [
+  { pattern = "bufr.cc", custom_domain = true },
+]
+workers_dev = false
+preview_urls = false
+
+# Photos waiting for the NAS, under waiting/<id>, and the home's last address
+# under state/home.json. KEYS is a secret: a JSON object from the SHA-256 of
+# each key to its name and role ("sender" or "fetcher"), set with
+#   npx wrangler secret put KEYS
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "bufr-photos"
+
+[observability]
+enabled = true
