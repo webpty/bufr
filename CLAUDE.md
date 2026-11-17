@@ -49,7 +49,7 @@ not, with no notification.
 
 ## The NAS container (`nas/`)
 
-- `compose.yaml` and `fetch.py`, plus `.env` with `BUFR_KEY=` (git-ignored),
+- `docker-compose.yml` and `fetch.py`, plus `bufr.env` with `BUFR_KEY=` (git-ignored; not `.env`, which Finder hides and File Station can't pick),
   in `/volume1/docker/bufr` on the Synology DS1525+, started as a project in
   Container Manager. Stock `python:3.13-alpine`, nothing built on the NAS.
   No SSH access to the NAS (David's choice): he sets it up from steps.

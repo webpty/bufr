@@ -4,7 +4,7 @@ services:
     container_name: bufr
     restart: unless-stopped
     command: ["python", "-u", "/app/fetch.py"]
-    env_file: .env
+    env_file: bufr.env
     environment:
       BUFR_URL: https://bufr.cc
       BUFR_ROOT: /volume1
