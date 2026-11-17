@@ -176,3 +176,11 @@ still works; only the record of it is lost.
   like every house override (unlayered CSS beats Tailwind utilities).
 - npm 11 blocks install scripts: `allowScripts` in package.json lists the
   ones that must run, HeroUI Pro's among them.
+
+## Workers Builds
+
+- Build command `npm run build`, deploy command left as Cloudflare set it
+  (`npx wrangler deploy`, which reads the config the Vite plugin writes).
+  With no build command the deploy fails: "The `assets` property ... is
+  missing the required `directory` property" (18 November 2026).
+- `HEROUI_AUTH_TOKEN` (the CI/CD token) is a build variable there.
