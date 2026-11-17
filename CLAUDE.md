@@ -13,7 +13,7 @@ not, with no notification.
 
 ## Stack
 
-- One Cloudflare Worker, `bufr`, on bufr.cc. No web page, so no React or
+- One Cloudflare Worker, `bufr-cc` (the name Cloudflare gave it from the repository), on bufr.cc. No web page, so no React or
   HeroUI (said in the plan): anyone without a key gets an empty 404.
 - R2 bucket `bufr-photos`, binding `PHOTOS`: `waiting/<id>` for each photo
   (custom metadata: path, sha256, modified, update, sender, added) and
