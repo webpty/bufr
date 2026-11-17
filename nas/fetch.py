@@ -29,7 +29,9 @@ def say(text):
 
 
 def ask(method, path, timeout=60):
-    request = urllib.request.Request(URL + path, method=method, headers={"Authorization": "Bearer " + KEY})
+    # Its own name: Cloudflare turns away Python's default one (error 1010).
+    request = urllib.request.Request(URL + path, method=method,
+                                     headers={"Authorization": "Bearer " + KEY, "User-Agent": "bufr-fetch/0.1"})
     return urllib.request.urlopen(request, timeout=timeout)
 
 
