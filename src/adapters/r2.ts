@@ -1,5 +1,5 @@
 import { Refused, type Waiting } from "../domain/model";
-import type { AvatarStore, PhotoStore } from "../domain/ports";
+import type { AvatarStore, ListStore, PhotoStore } from "../domain/ports";
 
 const WAITING = "waiting/";
 const HOME = "state/home.json";
@@ -107,5 +107,23 @@ export class R2AvatarStore implements AvatarStore {
 
   async remove(key: string) {
     await this.bucket.delete(key);
+  }
+}
+
+/** Geotag's sync lists, under lists/ in the same bucket: never under
+    waiting/, so the NAS never fetches one. */
+export class R2ListStore implements ListStore {
+  constructor(private bucket: R2Bucket) {}
+
+  async get(id: string) {
+    const o = await this.bucket.get("lists/" + id);
+    return o ? o.text() : null;
+  }
+
+  async put(id: string, text: string, path: string) {
+    await this.bucket.put("lists/" + id, text, {
+      httpMetadata: { contentType: "application/json" },
+      customMetadata: { path },
+    });
   }
 }

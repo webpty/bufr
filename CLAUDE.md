@@ -32,7 +32,7 @@ not, with no notification.
 
 | Binding | What | Name / id |
 | --- | --- | --- |
-| `PHOTOS` | R2 | `bufr-photos`: `waiting/<id>` (custom metadata: path, sha256, modified, update, sender, added), `state/home.json` (the home's last address), `media/avatars/<user>/<random>` (profile photos) |
+| `PHOTOS` | R2 | `bufr-photos`: `waiting/<id>` (custom metadata: path, sha256, modified, update, sender, added), `state/home.json` (the home's last address), `media/avatars/<user>/<random>` (profile photos), `lists/<id>` (Geotag's sync lists) |
 | `DB` | D1 | `bufr-db`, `432e95c6-e3e3-4ea0-80b0-b28d1901fd96` (created 17 Nov 2026, region WEUR) |
 | `EMAIL` | send_email | Cloudflare Email Service, codes from `sign-in@bufr.cc` |
 | `SIGN_IN_LIMIT` | ratelimit | namespace `1003`, 20 sign-in requests a minute per internet address. 1001 is blucat's, trako's and tracpac's, 1002 geome.cc's: never share one |
@@ -107,6 +107,14 @@ Locally, install with the token read from `/Users/david/Sites/.env`
   arrived), both optional. The Worker writes `{path, size, seconds, sender,
   at}` to the D1 table `fetched`, keeping the newest 200, for the overview.
   A failure to write it never fails the DELETE.
+- `GET /v1/lists` and `PUT /v1/lists` (sender), header `X-Path`: Geotag's
+  sync lists (0.2.1, David, 18 November 2026: a phone away from home did
+  not know what was copied). Only `.../~Geotag/saved.json` and
+  `.../~Geotag/cameras.json` under `homes/<user>/`, the phone's `home/`
+  made the key's home as for photos. Kept in R2 as `lists/<sha256 of the
+  path>`, never under `waiting/`, so the NAS never fetches one. GET answers
+  204 when none was written. Geotag merges and writes the whole list back;
+  entries are never removed.
 - Anything refused before an upload is read is read off first: answering in
   the middle of one drops the connection (seen locally as a 500).
 

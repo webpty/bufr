@@ -1,4 +1,5 @@
 import { Buffer } from "./domain/buffer";
+import type { Lists } from "./domain/lists";
 import { Refused, type Caller } from "./domain/model";
 import type { KeyBook } from "./domain/ports";
 
@@ -8,7 +9,7 @@ const json = (body: unknown, status = 200) =>
 /** Nothing for anyone without a key: no hint of what this is. */
 const nothing = () => new Response(null, { status: 404 });
 
-export async function handle(request: Request, buffer: Buffer, keys: KeyBook): Promise<Response> {
+export async function handle(request: Request, buffer: Buffer, keys: KeyBook, lists: Lists): Promise<Response> {
   const url = new URL(request.url);
   const key = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   const found = key ? await keys.find(key) : null;
@@ -39,6 +40,20 @@ export async function handle(request: Request, buffer: Buffer, keys: KeyBook): P
           request.body,
         );
         return json(photo, 201);
+      }
+    }
+
+    // Geotag's sync lists, by the path they have on the NAS (header X-Path).
+    if (route.length === 1 && route[0] === "lists") {
+      const path = decodeURIComponent(request.headers.get("x-path") ?? "");
+      if (request.method === "GET") {
+        const text = await lists.read(caller, path);
+        if (text === null) return new Response(null, { status: 204 });
+        return new Response(text, { headers: { "content-type": "application/json" } });
+      }
+      if (request.method === "PUT") {
+        await lists.write(caller, path, await request.text());
+        return new Response(null, { status: 204 });
       }
     }
 

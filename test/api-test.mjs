@@ -94,6 +94,25 @@ check("gone after clearing", (await call("/v1/photos/" + mine.id, FETCHER)).stat
   await call("/v1/photos/" + k.id, FETCHER, { method: "DELETE" });
 }
 
+// Geotag's sync lists: kept by path, the phone's "home/..." the key's own home.
+{
+  const list = JSON.stringify({ entries: [{ fileName: "A.JPG", size: 1 }], updatedAt: 1, updatedBy: "iphone" });
+  const path = (p) => ({ "x-path": encodeURIComponent(p) });
+  r = await call("/v1/lists", SENDER, { headers: path("homes/testuser/Lists Test/~Geotag/cameras.json") });
+  check("a list never written: nothing", r.status === 204, String(r.status));
+  r = await call("/v1/lists", SENDER, { method: "PUT", body: list, headers: path("home/Lists Test/~Geotag/saved.json") });
+  check("a list is kept", r.status === 204, `${r.status} ${await r.text()}`);
+  r = await call("/v1/lists", SENDER, { headers: path("homes/testuser/Lists Test/~Geotag/saved.json") });
+  check("the same list read by its full path", r.status === 200 && (await r.text()) === list, String(r.status));
+  check("a fetcher can't read a list", (await call("/v1/lists", FETCHER, { headers: path("homes/testuser/Lists Test/~Geotag/saved.json") })).status === 403);
+  r = await call("/v1/lists", SENDER, { method: "PUT", body: list, headers: path("homes/testuser/Lists Test/notes.json") });
+  check("only Geotag's lists are kept", r.status === 400, String(r.status));
+  r = await call("/v1/lists", SENDER, { method: "PUT", body: "not json", headers: path("homes/testuser/Lists Test/~Geotag/saved.json") });
+  check("a list that isn't JSON is refused", r.status === 400, String(r.status));
+  r = await call("/v1/photos", FETCHER);
+  check("the NAS never sees a list", !(await r.json()).photos.some((p) => p.path.includes("~Geotag")));
+}
+
 clearTestFetches();
 
 console.log(failed ? `${failed} failed` : "all passed");

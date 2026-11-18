@@ -13,6 +13,12 @@ export interface PhotoStore {
   sawHome(ip: string, at: Date): Promise<void>;
 }
 
+/** Geotag's sync lists, by the id of their path. */
+export interface ListStore {
+  get(id: string): Promise<string | null>;
+  put(id: string, text: string, path: string): Promise<void>;
+}
+
 /** The photos the NAS has fetched, newest first. */
 export interface FetchLog {
   /** Records one and keeps only the newest `keep`. */
