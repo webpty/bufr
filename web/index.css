@@ -37,6 +37,15 @@ main {
     border-radius: var(--radius);
   }
 
+  /* HeroUI Pro's dashboard pieces at the house corner too. */
+  .kpi,
+  .widget {
+    border-radius: var(--radius);
+  }
+  .widget__content {
+    border-radius: calc(var(--radius) - 0.25rem);
+  }
+
   /* HeroUI's code input does not centre its own boxes. */
   .input-otp {
     justify-content: center;

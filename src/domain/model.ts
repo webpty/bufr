@@ -31,11 +31,23 @@ export class Refused extends Error {
   }
 }
 
-/** A photo the NAS fetched and cleared, as the overview lists it. */
+/** A photo the NAS fetched and cleared, kept for good for the overview. */
 export interface Fetched {
   path: string;
   size: number;
   /** How long the NAS took to fetch it; null when it did not say. */
+  seconds: number | null;
+  sender: string;
+  /** When it arrived at bufr.cc; null for the fetches recorded before 0.3.0. */
+  added: string | null;
+  at: string;
+}
+
+/** A photo received from Geotag, kept for good for the overview. */
+export interface Upload {
+  size: number;
+  /** How long the upload took, timed at bufr.cc from the request arriving
+      to the photo being stored. */
   seconds: number | null;
   sender: string;
   at: string;

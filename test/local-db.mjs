@@ -14,8 +14,10 @@ export function sql(command) {
   return JSON.parse(out.slice(out.indexOf("[")))[0]?.results ?? [];
 }
 
-/** Whatever the tests' photos left in the fetch log. */
+/** Whatever the tests' photos left in the records of fetches and uploads.
+    Uploads keep no path, so they are known by the test key's name. */
 export const TEST_FOLDER = "2026.11.17 Test";
 export function clearTestFetches() {
   sql(`DELETE FROM fetched WHERE path LIKE '%/${TEST_FOLDER}/%'`);
+  sql(`DELETE FROM uploads WHERE sender = 'test sender'`);
 }

@@ -63,11 +63,22 @@ Locally, install with the token read from `/Users/david/Sites/.env`
   90 days. No passkeys.
 - Nobody is added from the page. A user row goes in by hand, and only with
   David's yes, like every change to the live database.
-- The overview refreshes every 10 s: when the NAS last checked in (when it
-  last asked for the list), each photo waiting (name, size, sender, how
-  long), the last 20 fetched (when, how long it took) and the fetching speed
-  (all their bytes over all their seconds). Names only reach the page,
-  never a full path and never the home's address.
+- The overview (0.3.0, David, 18 November 2026: "I don't care about
+  specific images; graphs, dials, progress, averages, numbers") is a
+  dashboard of HeroUI Pro pieces, refreshed every 10 s, for a period chosen
+  on a segmented switch (24 hours, 7 days, 30 days, this year, everything;
+  remembered in the browser). KPI tiles: waiting now (count, size, line of
+  how many waited, grey arrow against the period's start), NAS last checked
+  in, copied to the NAS (count, size, arrow against the period before).
+  Two dials: average upload and download speed, scaled to the best hour of
+  the last 30 days. Time on bufr.cc before the NAS (average, shortest,
+  longest, chart). Speed over time. Photos copied: bars per hour, day, week
+  or month with the running total, and the all-time total. No photo's name,
+  path or sender reaches the page, and never the home's address.
+- The Worker sums the records by UTC hour in SQL and puts the hours into
+  the reader's own days, weeks and months (`src/domain/calendar.ts`), with
+  the time zone the page sends. Waiting counts in the past are worked back
+  from now (arrivals and fetches since), so they hold only from 0.3.0 on.
 - Settings: two cards, You (photo through a cropper, 512 px JPEG cut in the
   browser; initials when none; name; e-mail shown, not editable; country)
   and Language and time (language, with `language_chosen` set only when
@@ -105,8 +116,12 @@ Locally, install with the token read from `/Users/david/Sites/.env`
 - `GET /v1/photos/<id>` (fetcher): the photo. `DELETE` once it is on the
   NAS, with `X-Seconds` (how long the fetch took) and `X-Size` (bytes that
   arrived), both optional. The Worker writes `{path, size, seconds, sender,
-  at}` to the D1 table `fetched`, keeping the newest 200, for the overview.
-  A failure to write it never fails the DELETE.
+  added, at}` to the D1 table `fetched`, kept for good, for the overview.
+  A failure to write it never fails the DELETE. Before 0.3.0 only the
+  newest 200 were kept and `added` was not, so those rows have none.
+- Each upload is timed at the Worker, from the request arriving to R2
+  having stored it, and written to the D1 table `uploads` (size, seconds,
+  sender, at). A failure to write it never fails the upload.
 - `GET /v1/lists` and `PUT /v1/lists` (sender), header `X-Path`: Geotag's
   sync lists (0.2.1, David, 18 November 2026: a phone away from home did
   not know what was copied). Only `.../~Geotag/saved.json` and
@@ -141,15 +156,10 @@ migrations/<file>` and `npm run db:remote -- migrations/<file>`. **The remote
 one needs David's yes first**, and runs before the push that needs it. D1
 refuses `BEGIN` or `COMMIT` in a file.
 
-On 17 Nov 2026 all four were applied locally only. The live database is
-empty: 0001 to 0004 and the first user row still wait for David's approval.
-
-Before the push that ships 0.2.0, all four of these, or the page fails:
-the build variable `HEROUI_AUTH_TOKEN` (without it the build fails and the
-old Worker keeps serving), `SESSION_SECRET` on the Worker, bufr.cc
-onboarded under Email Sending, and the four migrations with a first user
-row on the live database. Until `fetched` exists live, the NAS's clearing
-still works; only the record of it is lost.
+0001 to 0004 are live. 0005 (`fetched.added`, the `uploads` table) is
+applied locally on 18 Nov 2026 and must go live, with David's yes, before
+the push that ships 0.3.0: without it every upload and fetch still works,
+but none is recorded and the overview fails.
 
 ## Testing
 
@@ -176,9 +186,12 @@ still works; only the record of it is lost.
 
 ## Gotchas
 
-- `@heroui-pro/react` is imported by subpath (`@heroui-pro/react/cell-select`,
-  `/chat-loader`): the barrel pulls every Pro component's peers. Its KPI
-  component pulls the area chart and recharts, so it is not used.
+- `@heroui-pro/react` is imported by subpath (`@heroui-pro/react/kpi`,
+  `/widget`, `/line-chart`...): the barrel pulls every Pro component's
+  peers. Its charts need `recharts`, a dependency since 0.3.0. Chart
+  colours are `--accent`, `--success` and `--warning`: HeroUI's
+  `--chart-1` to `--chart-5` are shades of one blue.
+- `.kpi` and `.widget` are set to the house corner in `web/index.css`.
 - HeroUI's surface is the page's colour in the light theme: `.surface`
   carries a border, set once in `web/index.css`, inside `@layer components`
   like every house override (unlayered CSS beats Tailwind utilities).

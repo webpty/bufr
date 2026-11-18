@@ -3,7 +3,7 @@
 // with a key from shared/strings.ts; anything else is "could not be reached".
 
 import type { StringKey } from "../shared/strings";
-import type { Me, Overview, SettingsPatch } from "../shared/types";
+import type { Me, Overview, Period, SettingsPatch } from "../shared/types";
 
 export class ApiError extends Error {
   constructor(
@@ -43,7 +43,8 @@ export const api = {
   savePhoto: (photo: Blob) =>
     call<{ me: Me }>("/api/me/photo", { method: "PUT", body: photo, headers: { "content-type": photo.type } }),
   removePhoto: () => call<{ me: Me }>("/api/me/photo", { method: "DELETE" }),
-  overview: () => call<Overview>("/api/overview"),
+  overview: (period: Period, zone: string) =>
+    call<Overview>(`/api/overview?period=${period}&zone=${encodeURIComponent(zone)}`),
 };
 
 export const photoUrl = (me: Me) => (me.photo ? `/api/me/photo?v=${encodeURIComponent(me.photo)}` : undefined);

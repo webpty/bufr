@@ -1,8 +1,8 @@
-// The page's data in D1: the allow-list, sign-in codes, sessions, and the
-// fetches the NAS reported. The domain sees only the ports.
+// The page's data in D1: the allow-list, sign-in codes, sessions, and every
+// upload and fetch. The domain sees only the ports.
 
-import type { Fetched, User } from "../domain/model";
-import type { CodeStore, FetchLog, SessionStore, UserStore } from "../domain/ports";
+import type { Fetched, Upload, User } from "../domain/model";
+import type { CodeStore, FetchedHour, History, HistoryQuery, HourSums, Ledger, SessionStore, Sum, UserStore } from "../domain/ports";
 
 interface UserRow {
   id: string;
@@ -153,21 +153,69 @@ export class D1Sessions implements SessionStore {
   }
 }
 
-export class D1FetchLog implements FetchLog {
+/** How long a fetched photo waited at bufr.cc, in seconds; never below 0
+    should the clocks disagree. */
+const WAITED = `max(0, (julianday(at) - julianday(added)) * 86400.0)`;
+
+const sums = (table: "fetched" | "uploads") => `
+  count(*) AS n,
+  coalesce(sum(size), 0) AS bytes,
+  coalesce(sum(CASE WHEN seconds > 0 THEN size ELSE 0 END), 0) AS timedBytes,
+  coalesce(sum(CASE WHEN seconds > 0 THEN seconds ELSE 0 END), 0) AS timedSeconds
+  ${table === "fetched" ? `, count(added) AS waits, coalesce(sum(${WAITED}), 0) AS waitSum, min(${WAITED}) AS waitMin, max(${WAITED}) AS waitMax` : ""}`;
+
+const fastest = (table: "fetched" | "uploads") => `
+  SELECT max(b * 1.0 / s) AS v FROM (
+    SELECT sum(size) AS b, sum(seconds) AS s FROM ${table}
+    WHERE seconds > 0 AND at >= ?1 GROUP BY substr(at, 1, 13)
+  )`;
+
+export class D1Ledger implements Ledger {
   constructor(private db: D1Database) {}
 
-  async record(f: Fetched, keep: number) {
-    await this.db.batch([
-      this.db.prepare(`INSERT INTO fetched (path, size, seconds, sender, at) VALUES (?, ?, ?, ?, ?)`).bind(f.path, f.size, f.seconds, f.sender, f.at),
-      this.db.prepare(`DELETE FROM fetched WHERE id NOT IN (SELECT id FROM fetched ORDER BY at DESC, id DESC LIMIT ?)`).bind(keep),
-    ]);
+  async fetched(f: Fetched) {
+    await this.db
+      .prepare(`INSERT INTO fetched (path, size, seconds, sender, added, at) VALUES (?, ?, ?, ?, ?, ?)`)
+      .bind(f.path, f.size, f.seconds, f.sender, f.added, f.at)
+      .run();
   }
 
-  async recent(limit: number) {
-    const { results } = await this.db
-      .prepare(`SELECT path, size, seconds, sender, at FROM fetched ORDER BY at DESC, id DESC LIMIT ?`)
-      .bind(limit)
-      .all<Fetched>();
-    return results;
+  async uploaded(u: Upload) {
+    await this.db.prepare(`INSERT INTO uploads (size, seconds, sender, at) VALUES (?, ?, ?, ?)`).bind(u.size, u.seconds, u.sender, u.at).run();
+  }
+
+  async history(q: HistoryQuery): Promise<History> {
+    const db = this.db;
+    const none = "9999";
+    const [fetched, uploads, arrivals, before, fetchedPrevious, uploadsPrevious, fastDown, fastUp, firsts] = await db.batch([
+      db.prepare(`SELECT substr(at, 1, 13) AS hour, ${sums("fetched")} FROM fetched WHERE at >= ?1 GROUP BY hour`).bind(q.from),
+      db.prepare(`SELECT substr(at, 1, 13) AS hour, ${sums("uploads")} FROM uploads WHERE at >= ?1 GROUP BY hour`).bind(q.from),
+      db.prepare(`SELECT substr(added, 1, 13) AS hour, count(*) AS n FROM fetched WHERE added >= ?1 GROUP BY hour`).bind(q.from),
+      db.prepare(`SELECT count(*) AS n, coalesce(sum(size), 0) AS bytes FROM fetched WHERE at < ?1`).bind(q.from),
+      db.prepare(`SELECT count(*) AS n, coalesce(sum(size), 0) AS bytes FROM fetched WHERE at >= ?1 AND at < ?2`).bind(q.previousFrom ?? none, q.from),
+      db.prepare(`SELECT count(*) AS n, coalesce(sum(size), 0) AS bytes FROM uploads WHERE at >= ?1 AND at < ?2`).bind(q.previousFrom ?? none, q.from),
+      db.prepare(fastest("fetched")).bind(q.fastestFrom),
+      db.prepare(fastest("uploads")).bind(q.fastestFrom),
+      db.prepare(
+        `SELECT (SELECT min(at) FROM fetched) AS firstFetch,
+                (SELECT min(at) FROM fetched WHERE added IS NOT NULL) AS firstAdded,
+                (SELECT min(at) FROM uploads) AS firstUpload`,
+      ),
+    ]);
+    const one = <T>(r: D1Result<unknown>) => (r.results[0] ?? null) as T | null;
+    const f = one<{ firstFetch: string | null; firstAdded: string | null; firstUpload: string | null }>(firsts);
+    const tracked = [f?.firstAdded, f?.firstUpload].filter((x): x is string => !!x).sort()[0] ?? null;
+    return {
+      fetched: fetched.results as FetchedHour[],
+      uploads: uploads.results as HourSums[],
+      arrivals: arrivals.results as { hour: string; n: number }[],
+      fetchedBefore: one<Sum>(before) ?? { n: 0, bytes: 0 },
+      fetchedPrevious: q.previousFrom ? one<Sum>(fetchedPrevious) : null,
+      uploadsPrevious: q.previousFrom ? one<Sum>(uploadsPrevious) : null,
+      fastestDownload: one<{ v: number | null }>(fastDown)?.v ?? null,
+      fastestUpload: one<{ v: number | null }>(fastUp)?.v ?? null,
+      firstFetch: f?.firstFetch ?? null,
+      firstTracked: tracked,
+    };
   }
 }

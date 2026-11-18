@@ -4,7 +4,7 @@
 // locale decides the order as a side effect of the language, and here the two
 // are separate choices.
 
-import type { DateOrder, Me } from "../shared/types";
+import type { DateOrder, Me, Unit } from "../shared/types";
 
 export interface Preferences {
   dateOrder: DateOrder;
@@ -104,4 +104,21 @@ export function formatDuration(seconds: number, language: string): string {
     return rest ? `${unit(language, hours, "hour")} ${unit(language, rest, "minute")}` : unit(language, hours, "hour");
   }
   return new Intl.NumberFormat(language, { style: "unit", unit: "day", unitDisplay: "long" }).format(Math.floor(hours / 24));
+}
+
+/** What a bar on a chart covers, short: "14:00", "18 Nov", "Nov 26". The
+    day comes first or second as the reader's date order has it. */
+export function formatBar(at: string | Date, unit: Unit, how: Preferences): string {
+  const when = new Date(at);
+  if (unit === "hour") return formatTime(when, how);
+  if (unit === "month") {
+    return new Intl.DateTimeFormat(how.language, { timeZone: how.timeZone, month: "short", year: "2-digit" }).format(when);
+  }
+  const { day, named } = pieces(when, how);
+  return how.dateOrder === "dmmmy" || how.dateOrder === "dmy" ? `${Number(day)} ${named}` : `${named} ${Number(day)}`;
+}
+
+/** A count in the reader's way of writing numbers: 1,234 or 1 234. */
+export function formatCount(n: number, language: string): string {
+  return new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(n);
 }

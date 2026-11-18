@@ -1,11 +1,8 @@
 import { Refused, type Caller, type Waiting } from "./model";
-import type { FetchLog, PhotoStore } from "./ports";
+import type { Ledger, PhotoStore } from "./ports";
 
 /** The home counts as seen while the NAS has fetched within this time. */
 const HOME_FRESH_MS = 10 * 60 * 1000;
-
-/** How many fetches are remembered for the overview. */
-export const FETCHES_KEPT = 200;
 
 /** A path on the NAS: plain folder names, never "..", never absolute. */
 export function cleanPath(raw: string): string {
@@ -26,7 +23,7 @@ export async function idFor(path: string): Promise<string> {
 export class Buffer {
   constructor(
     private store: PhotoStore,
-    private log: FetchLog,
+    private ledger: Ledger,
   ) {}
 
   private need(caller: Caller, role: Caller["role"]) {
@@ -64,11 +61,22 @@ export class Buffer {
     if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Refused(400, "The fingerprint is missing.");
     if (!Number.isFinite(input.size) || input.size <= 0) throw new Refused(411, "The size is missing.");
     if (input.modified !== undefined && Number.isNaN(Date.parse(input.modified))) throw new Refused(400, "The date is not readable.");
-    return this.store.put(
+    // Timed from here to the photo being stored: the body is still arriving
+    // as it is written, so this is close to how long the upload took.
+    const started = Date.now();
+    const kept = await this.store.put(
       { id: await idFor(path), path, sha256, modified: input.modified, update: input.update, sender: caller.name, added: new Date().toISOString() },
       body,
       input.size,
     );
+    const seconds = (Date.now() - started) / 1000;
+    try {
+      // The photo is kept: a failure to write the record down must not fail it.
+      await this.ledger.uploaded({ size: kept.size, seconds: seconds > 0 ? seconds : null, sender: caller.name, at: new Date().toISOString() });
+    } catch (error) {
+      console.error("could not record the upload", error);
+    }
+    return kept;
   }
 
   async waiting(caller: Caller, ip: string | null): Promise<Waiting[]> {
@@ -95,7 +103,7 @@ export class Buffer {
     try {
       // The photo is already off: a failure to write it down must not make
       // the NAS think it is still waiting.
-      await this.log.record({ path: photo.path, size, seconds, sender: photo.sender, at: new Date().toISOString() }, FETCHES_KEPT);
+      await this.ledger.fetched({ path: photo.path, size, seconds, sender: photo.sender, added: photo.added || null, at: new Date().toISOString() });
     } catch (error) {
       console.error("could not record the fetch", error);
     }

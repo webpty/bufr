@@ -2,7 +2,7 @@
 // API behind the page, and everything else is the page itself, whose
 // assets binding hands back index.html for any path it does not know.
 
-import { D1FetchLog } from "./adapters/d1";
+import { D1Ledger } from "./adapters/d1";
 import { SecretKeyBook } from "./adapters/keys";
 import { R2ListStore, R2PhotoStore } from "./adapters/r2";
 import { Buffer } from "./domain/buffer";
@@ -15,7 +15,7 @@ export default {
   fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith("/v1/")) {
-      return handle(request, new Buffer(new R2PhotoStore(env.PHOTOS), new D1FetchLog(env.DB)), new SecretKeyBook(env.KEYS), new Lists(new R2ListStore(env.PHOTOS)));
+      return handle(request, new Buffer(new R2PhotoStore(env.PHOTOS), new D1Ledger(env.DB)), new SecretKeyBook(env.KEYS), new Lists(new R2ListStore(env.PHOTOS)));
     }
     if (pathname.startsWith("/api/")) return handlePage(request, env);
     return env.ASSETS.fetch(request);

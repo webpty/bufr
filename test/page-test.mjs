@@ -173,15 +173,29 @@ try {
   r = await call("/v1/photos/" + fetchedOne.id, FETCHER, { method: "DELETE", headers: { "x-seconds": "4", "x-size": String(body.length) } });
   check("the NAS clears with how long it took", r.status === 204);
 
-  r = await json("/api/overview", {}, cookie);
+  const zone = encodeURIComponent("America/Panama");
+  r = await json(`/api/overview?period=day&zone=${zone}`, {}, cookie);
   const o = await r.json();
-  const w = o.waiting?.find((p) => p.name === "PAGE0001.JPG");
-  const f = o.fetched?.[0];
   check("overview: last checked in", r.status === 200 && typeof o.lastCheckIn === "string" && Date.now() - Date.parse(o.lastCheckIn) < 60_000, JSON.stringify(o.lastCheckIn));
-  check("overview: waiting, by name, size and sender", w && w.size === body.length && w.sender === "test sender" && !("path" in w), JSON.stringify(w));
-  check("overview: fetched, with when and how long", f && f.name === "PAGE0002.JPG" && f.seconds === 4 && f.size === body.length && !("path" in f), JSON.stringify(f));
+  check("overview: waiting now, counted and sized", o.waiting?.count >= 1 && o.waiting.bytes >= body.length, JSON.stringify(o.waiting));
+  check("overview: copied in the period", o.copied?.count >= 1 && o.copied.bytes >= body.length, JSON.stringify(o.copied));
+  check("overview: upload speed timed", typeof o.upload?.average === "number" && o.upload.average > 0, JSON.stringify(o.upload));
+  check("overview: download speed from the NAS's report", typeof o.download?.average === "number" && o.download.average > 0, JSON.stringify(o.download));
+  check("overview: time on bufr.cc before the NAS", o.wait && o.wait.average >= 0 && o.wait.longest >= o.wait.shortest, JSON.stringify(o.wait));
+  check("overview: 24 hourly bars", o.unit === "hour" && o.points?.length === 24, String(o.points?.length));
+  const last = o.points?.[o.points.length - 1];
+  check("overview: running total ends at the all-time total", last?.total === o.total?.count, `${last?.total} vs ${o.total?.count}`);
+  check("overview: waiting now ends the waiting line", last?.waiting === o.waiting.count, `${last?.waiting} vs ${o.waiting.count}`);
+  check("overview: no photo name, path or sender in it", !/PAGE000|Geotag|test sender/.test(JSON.stringify(o)));
   check("overview: no internet address in it", !JSON.stringify(o).includes("127.0.0.1"));
-  check("overview: speed over the recent fetches", typeof o.bytesPerSecond === "number" && o.bytesPerSecond > 0, String(o.bytesPerSecond));
+  for (const [period, unit, bars] of [["week", "day", 7], ["month", "day", 30], ["year", "week", null], ["all", "month", null]]) {
+    r = await json(`/api/overview?period=${period}&zone=${zone}`, {}, cookie);
+    const p = await r.json();
+    const ok = r.status === 200 && p.period === period && p.unit === unit && (bars === null ? p.points.length >= 1 : p.points.length === bars);
+    check(`overview: ${period}, by ${unit}`, ok && p.points[p.points.length - 1].total === p.total.count, JSON.stringify({ unit: p.unit, n: p.points?.length }));
+  }
+  r = await json("/api/overview?period=nonsense&zone=Not%2FA_Zone", {}, cookie);
+  check("overview: an unknown period or zone falls back", r.status === 200 && (await r.json()).period === "day");
   await call("/v1/photos/" + waiting.id, FETCHER, { method: "DELETE" });
 
   // Signing out ends the session for good.

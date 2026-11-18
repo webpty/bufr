@@ -4,10 +4,10 @@
 // own language.
 
 import { isStringKey, type StringKey } from "../shared/strings";
-import type { SettingsPatch } from "../shared/types";
+import { PERIODS, type Period, type SettingsPatch } from "../shared/types";
 import { R2AvatarStore, R2PhotoStore } from "./adapters/r2";
 import { CloudflareMailer } from "./adapters/mail";
-import { D1Codes, D1FetchLog, D1Sessions, D1Users } from "./adapters/d1";
+import { D1Codes, D1Ledger, D1Sessions, D1Users } from "./adapters/d1";
 import { clearSession, readSession, setSession } from "./cookies";
 import { Refused } from "./domain/model";
 import { overview } from "./domain/overview";
@@ -106,7 +106,10 @@ export async function handlePage(request: Request, env: Env): Promise<Response> 
     }
 
     if (path === "/api/overview" && method === "GET") {
-      return Response.json(await overview(new R2PhotoStore(env.PHOTOS), new D1FetchLog(env.DB), clock), {
+      const asked = url.searchParams.get("period");
+      const period: Period = (PERIODS as string[]).includes(asked ?? "") ? (asked as Period) : "day";
+      const zone = knownZone(url.searchParams.get("zone")) ?? knownZone(user.timeZone) ?? "UTC";
+      return Response.json(await overview(new R2PhotoStore(env.PHOTOS), new D1Ledger(env.DB), clock, period, zone), {
         headers: { "cache-control": "no-store" },
       });
     }
@@ -116,6 +119,17 @@ export async function handlePage(request: Request, env: Env): Promise<Response> 
     if (error instanceof Refused && isStringKey(error.message)) return bad(error.message, error.status);
     console.error(error);
     return bad("error.somethingWentWrong", 500);
+  }
+}
+
+/** A time zone the Worker knows, or null. */
+function knownZone(zone: string | null | undefined): string | null {
+  if (!zone || zone.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: zone });
+    return zone;
+  } catch {
+    return null;
   }
 }
 

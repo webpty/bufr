@@ -1,4 +1,4 @@
-import type { Fetched, User, Waiting } from "./model";
+import type { Fetched, Upload, User, Waiting } from "./model";
 
 /** Where waiting photos are kept. */
 export interface PhotoStore {
@@ -19,11 +19,64 @@ export interface ListStore {
   put(id: string, text: string, path: string): Promise<void>;
 }
 
-/** The photos the NAS has fetched, newest first. */
-export interface FetchLog {
-  /** Records one and keeps only the newest `keep`. */
-  record(fetched: Fetched, keep: number): Promise<void>;
-  recent(limit: number): Promise<Fetched[]>;
+/** Every upload and every fetch, kept for good, and summed by the hour for
+    the overview. */
+export interface Ledger {
+  fetched(fetched: Fetched): Promise<void>;
+  uploaded(upload: Upload): Promise<void>;
+  history(query: HistoryQuery): Promise<History>;
+}
+
+/** All times ISO 8601 in UTC; "0000" for "since the start". */
+export interface HistoryQuery {
+  from: string;
+  /** The start of the period before, for comparing; null when there is none. */
+  previousFrom: string | null;
+  /** How far back to look for the fastest hour. */
+  fastestFrom: string;
+}
+
+/** Sums over one UTC hour, "2026-11-18T14". Timed sums cover only the
+    transfers that said how long they took. */
+export interface HourSums {
+  hour: string;
+  n: number;
+  bytes: number;
+  timedBytes: number;
+  timedSeconds: number;
+}
+
+export interface FetchedHour extends HourSums {
+  /** Of those, the ones that know when they arrived, and how long they
+      waited at bufr.cc in all, the shortest and the longest. */
+  waits: number;
+  waitSum: number;
+  waitMin: number | null;
+  waitMax: number | null;
+}
+
+export interface Sum {
+  n: number;
+  bytes: number;
+}
+
+export interface History {
+  fetched: FetchedHour[];
+  uploads: HourSums[];
+  /** Fetched photos by the hour they arrived at bufr.cc. */
+  arrivals: { hour: string; n: number }[];
+  /** Everything fetched before `from`. */
+  fetchedBefore: Sum;
+  fetchedPrevious: Sum | null;
+  uploadsPrevious: Sum | null;
+  /** The best hour's speed since `fastestFrom`, bytes a second. */
+  fastestDownload: number | null;
+  fastestUpload: number | null;
+  /** The first fetch ever, and the first that knew when it arrived or the
+      first upload timed, whichever came first: when the record of waiting
+      photos begins. */
+  firstFetch: string | null;
+  firstTracked: string | null;
 }
 
 /** The keys allowed in, by the SHA-256 of each. */
